@@ -11,5 +11,5 @@ jobs:
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: PROJE_ID
+          projectId: bdr-servis
           channelId: live
