@@ -113,7 +113,8 @@ banka_kasa:{l:'Banka → Kasa',a:{banka:-1,kasa:1},c:0,g:'v',grp:'Virman'},
 alacak:{l:'Cariye iş/fatura yaz (cari bize borçlandı)',a:{},c:1,g:'k',grp:'Cari kaydı'},
 borc:{l:'Tedarikçiden alım yaz (biz borçlandık)',a:{},c:-1,g:'k',grp:'Cari kaydı'},
 iskonto:{l:'Müşteri borcundan iskonto (para hareketi yok)',a:{},c:-1,g:'k',grp:'Cari kaydı'},
-acilis_bb:{l:'Açılış bakiyesi (bize borçlu)',a:{},c:1,g:'k',grp:'Açılış',gz:1},acilis_bz:{l:'Açılış bakiyesi (biz borçluyuz)',a:{},c:-1,g:'k',grp:'Açılış',gz:1}
+acilis_bb:{l:'Açılış bakiyesi (bize borçlu)',a:{},c:1,g:'k',grp:'Açılış',gz:1},acilis_bz:{l:'Açılış bakiyesi (biz borçluyuz)',a:{},c:-1,g:'k',grp:'Açılış',gz:1},
+hacilis_kasa:{l:'Açılış bakiyesi – Kasa',a:{kasa:1},c:0,g:'k',grp:'Açılış',gz:1},hacilis_banka:{l:'Açılış bakiyesi – Banka',a:{banka:1},c:0,g:'k',grp:'Açılış',gz:1},hacilis_odeal:{l:'Açılış bakiyesi – Ödeal kartı',a:{odeal:1},c:0,g:'k',grp:'Açılış',gz:1},hacilis_kart:{l:'Açılış bakiyesi – Kredi kartı borcu',a:{kart:1},c:0,g:'k',grp:'Açılış',gz:1}
 };
 const ACC={kasa:['Kasa','Eldeki nakit'],banka:['Banka','Hesaptaki bakiye'],odeal:['Ödeal kartı','POS tahsilatının yattığı kart'],kart:['Kredi kartı','Ödenmemiş kart borcu']};
 const LB={kasa_in:'Kasa tahsilat',bank_in:'Banka tahsilat',pos_in:'POS tahsilat',kasa_out:'Kasa tediye',bank_out:'Banka tediye',odeal_out:'Ödeal kartı tediye',kart_out:'Kredi kartı tediye',odeal_kasa:'Virman: Ödeal kartı → Kasa',pos_banka:'Virman: Ödeal kartı → Banka',kasa_banka:'Virman: Kasa → Banka',banka_kasa:'Virman: Banka → Kasa',banka_kart:'Virman: Banka → Kredi kartı',alacak:'Cari borç kaydı',borc:'Cari alacak kaydı',iskonto:'İskonto',acilis_bb:'Açılış bakiyesi (bize borçlu)',acilis_bz:'Açılış bakiyesi (biz borçluyuz)'};
@@ -156,12 +157,27 @@ ${Object.keys(ks).length?`<h2>Kesinti ve masraflar</h2><div class="list">${Objec
 ${last.length?`<button class="lnk" onclick="go('list')">Tüm hareketleri gör</button>`:''}
 <button class="btn" style="margin-top:20px" onclick="gunKapat()">Günü kapat (yedek + gün sonu raporu)</button><div class="sub" style="margin:6px 0 4px">${esc(bkInfo())}</div><div><button class="lnk" onclick="yedekler()">Yedekler ve geri yükleme</button></div>
 <div><button class="lnk" onclick="resetQ()">Uygulamayı ilk haline çevir</button></div>`}
+function acLink(k){const ex=S.hareket.find(h=>h.t==='hacilis_'+k);return'<div style="margin:-4px 0 8px"><button class="lnk" style="font-size:13px" onclick="acilisHesap(\''+k+'\')">'+(ex?'Açılış bakiyesi: '+fmt(ex.tutar)+' (düzenle)':'＋ Açılış bakiyesi ekle')+'</button></div>'}
+function acilisHesap(k){
+ const ex=S.hareket.find(h=>h.t==='hacilis_'+k),ds=S.hareket.map(h=>h.tarih).sort()[0]||today(),dt=ex?ex.tarih:(ds<today()?ds:today());
+ dlg.innerHTML='<b>'+esc(ACC[k][0])+' – açılış bakiyesi</b><p class="sub" style="margin:6px 0 10px">'+(k==='kart'?'Programa başladığın andaki ödenmemiş kart borcunu gir.':'Programa başladığın andaki bakiyeyi gir.')+' Tahsilat veya tediye toplamlarına karışmaz.</p><label>Tutar (₺)</label><input id="ah-t" inputmode="decimal" placeholder="0,00" oninput="amt(this)" value="'+(ex?fmtAmt(String(ex.tutar).replace('.',',')):'')+'"><label>Açılış tarihi</label><input id="ah-d" type="date" value="'+dt+'"><div id="ah-e" class="neg" style="min-height:20px"></div><button class="btn" onclick="acilisKaydet(\''+k+'\')">Kaydet</button>'+(ex?'<button class="btn g" style="margin-top:8px" onclick="acilisSil(\''+k+'\')">Açılış bakiyesini sil</button>':'')+'<button class="btn g" style="margin-top:8px" onclick="dlg.close()">Vazgeç</button>';dlg.showModal()}
+function acilisKaydet(k){
+ const e=document.getElementById('ah-e'),tu=Math.round(parseN(document.getElementById('ah-t').value)*100)/100;
+ if(!(tu>0)){e.textContent='Tutarı sayı olarak gir, örneğin 15000,50.';return}
+ const ex=S.hareket.find(h=>h.t==='hacilis_'+k);
+ if(k!=='kart'){const nb=balances(ex&&ex.id)[k]+tu;if(nb<-0.005&&nb<balances()[k]-0.005){e.textContent=ACC[k][0]+' bakiyesi bu tutarla eksiye düşer ('+fmt(nb)+'). Önce bu hesaba dayanan hareketleri kontrol et.';return}}
+ const r={id:ex?ex.id:uid(),t:'hacilis_'+k,tutar:tu,ucret:0,cari:'',tarih:document.getElementById('ah-d').value||today(),not:''};
+ if(ex)S.hareket[S.hareket.indexOf(ex)]=r;else S.hareket.push(r);save();dlg.close();render()}
+function acilisSil(k){
+ const ex=S.hareket.find(h=>h.t==='hacilis_'+k);if(!ex)return;
+ if(k!=='kart'){const nb=balances(ex.id)[k];if(nb<-0.005&&nb<balances()[k]-0.005){document.getElementById('ah-e').textContent='Silinirse '+ACC[k][0]+' bakiyesi eksiye düşer ('+fmt(nb)+'). Önce bu hesaba dayanan hareketleri kontrol et.';return}}
+ S.hareket=S.hareket.filter(h=>h.id!==ex.id);save();dlg.close();render()}
 function list(){
 const F=[['all','Tümü'],['kasa','Kasa'],['banka','Banka'],['odeal','Ödeal'],['kart','Kart']];
 let a=[...S.hareket].sort((x,y)=>y.tarih.localeCompare(x.tarih)||y.id.localeCompare(x.id));
 if(V.f!=='all')a=a.filter(h=>T[h.t]&&T[h.t].a[V.f]!==undefined);
 const q=V.q.toLowerCase();if(q)a=a.filter(h=>(cname(h.cari)+' '+(h.not||'')+' '+(h.plaka||'')).toLowerCase().includes(q));
-return`<h2>Hareketler</h2><div class="chips">${F.map(f=>`<button class="chip ${V.f===f[0]?'on':''}" onclick="V.f='${f[0]}';render()">${f[1]}</button>`).join('')}</div>
+return`<h2>Hareketler</h2><div class="chips pf" style="margin-top:4px">${F.map(f=>`<button class="chip ${V.f===f[0]?'on':''}" onclick="V.f='${f[0]}';render()">${f[1]}</button>`).join('')}</div>${V.f!=='all'?acLink(V.f):''}
 <input placeholder="Cari veya açıklama ara" value="${esc(V.q)}" oninput="V.q=this.value;renderKeep()">
 <div id="lst">${a.length?a.map(h=>row(h)).join(''):'<div class="empty">Bu filtrede hareket yok.</div>'}</div>`}
 function renderKeep(){const el=document.getElementById('lst');const q=V.q.toLowerCase();let a=[...S.hareket].sort((x,y)=>y.tarih.localeCompare(x.tarih));if(V.f!=='all')a=a.filter(h=>T[h.t]&&T[h.t].a[V.f]!==undefined);if(q)a=a.filter(h=>(cname(h.cari)+' '+(h.not||'')+' '+(h.plaka||'')).toLowerCase().includes(q));el.innerHTML=a.length?a.map(h=>row(h)).join(''):'<div class="empty">Bu filtrede hareket yok.</div>'}
@@ -180,7 +196,7 @@ m.innerHTML=V.tab==='home'?home():V.tab==='list'?list():V.tab==='cari'?cariler()
 document.getElementById('rpbtn').hidden=V.tab!=='home';document.getElementById('n-home').className=(V.tab==='home'||V.tab==='list')?'on':'';
 document.getElementById('n-cari').className=(V.tab==='cari'||V.tab==='cdet')?'on':'';
 if(keep){const i=m.querySelector('input');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}}}
-function openForm(cid,eid,pl,ty){{const E0=eid?S.hareket.find(h=>h.id===eid):null;if(E0&&/^acilis_/.test(E0.t)){cariForm(E0.cari);return}}LS='o';const E=eid?S.hareket.find(h=>h.id===eid):null;if(E)cid=E.cari;
+function openForm(cid,eid,pl,ty){{const E0=eid?S.hareket.find(h=>h.id===eid):null;if(E0&&/^acilis_/.test(E0.t)){cariForm(E0.cari);return}if(E0&&/^hacilis_/.test(E0.t)){acilisHesap(E0.t.slice(8));return}}LS='o';const E=eid?S.hareket.find(h=>h.id===eid):null;if(E)cid=E.cari;
 const d=document.getElementById('dlg');
 const groups={};Object.keys(T).filter(k=>!T[k].gz).forEach(k=>{(groups[T[k].grp]=groups[T[k].grp]||[]).push(k)});
 d.innerHTML=`${E?'<b>Hareketi düzenle</b><br>':''}<label>İşlem</label><select id="f-g" onchange="gchg()">${Object.keys(G).map(g=>`<option ${E&&grpOf(E.t)===g?'selected':''}>${g}</option>`).join('')}</select><label id="f-gl">Hesap</label><select id="f-t" onchange="tchg()">${Object.keys(groups).map(g=>`<optgroup label="${g}">${groups[g].map(k=>`<option value="${k}" ${E&&E.t===k?'selected':''}>${esc(T[k].l)}</option>`).join('')}</optgroup>`).join('')}</select>
@@ -230,7 +246,7 @@ function ek(h,bal){const t=T[h.t],e=t.c*h.tutar,p=h.tarih.split('-'),neg=e<0;ret
 function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function prange(){const n=new Date(),y=n.getFullYear(),m=n.getMonth();if(V.pf==='tumu')return['0000-01-01','9999-12-31'];if(V.pf==='bugun')return[ymd(n),ymd(n)];if(V.pf==='hafta'){const d=(n.getDay()+6)%7;return[ymd(new Date(y,m,n.getDate()-d)),ymd(new Date(y,m,n.getDate()-d+6))]}if(V.pf==='ay')return[ymd(new Date(y,m,1)),ymd(new Date(y,m+1,0))];return[V.pa||'0000-01-01',V.pb||'9999-12-31']}
 function pfUI(R){const O=[['tumu','Tümü'],['bugun','Bugün'],['hafta','Bu hafta'],['ay','Bu ay'],['aralik','Aralık']];return`<div class="chips pf">${O.map(o=>`<button class="chip ${V.pf===o[0]?'on':''}" onclick="V.pf='${o[0]}';render()">${o[1]}</button>`).join('')}</div>${V.pf==='aralik'?`<div class="two"><div><label>Başlangıç</label><input type="date" value="${V.pa}" onchange="V.pa=this.value;render()"></div><div><label>Bitiş</label><input type="date" value="${V.pb}" onchange="V.pb=this.value;render()"></div></div>`:''}<div class="sub">${V.pf==='tumu'?'Tüm kayıtlar':(R[0]>'1900'?fd(R[0]):'…')+' – '+(R[1]<'9000'?fd(R[1]):'…')}. Bakiyeler her zaman güncel.</div>`}
-function pm(P,k){let i=0,o=0;P.forEach(h=>{const t=T[h.t];if(!t||t.a[k]===undefined)return;const d=t.a[k]*h.tutar+((t.fee&&t.fee[k]&&h.ucret)?t.fee[k]*h.ucret:0);if(d>0)i+=d;else o-=d});return k==='kart'?'Harcama '+fmt(i)+' / Ödeme '+fmt(o):'Giriş '+fmt(i)+' / Çıkış '+fmt(o)}
+function pm(P,k){let i=0,o=0;P.forEach(h=>{const t=T[h.t];if(!t||t.gz||t.a[k]===undefined)return;const d=t.a[k]*h.tutar+((t.fee&&t.fee[k]&&h.ucret)?t.fee[k]*h.ucret:0);if(d>0)i+=d;else o-=d});return k==='kart'?'Harcama '+fmt(i)+' / Ödeme '+fmt(o):'Giriş '+fmt(i)+' / Çıkış '+fmt(o)}
 let BM={};
 function dl(h,k){const t=T[h.t];return t&&t.a[k]!==undefined?t.a[k]*h.tutar+((t.fee&&t.fee[k]&&h.ucret)?t.fee[k]*h.ucret:0):0}
 function bal2(h,k){if(!BM[k]){const m={};let b=0;[...S.hareket].sort((x,y)=>x.tarih.localeCompare(y.tarih)||x.id.localeCompare(y.id)).forEach(x=>{if(T[x.t]&&T[x.t].a[k]!==undefined){b+=dl(x,k);m[x.id]=b}});BM[k]=m}return BM[k][h.id]||0}
